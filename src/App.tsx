@@ -15,9 +15,7 @@ import GoalsPage from './pages/GoalsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 
-/* =========================
-   LOADING UI
-========================= */
+/* LOADING */
 function LoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-dark-950">
@@ -27,37 +25,27 @@ function LoadingScreen() {
   );
 }
 
-/* =========================
-   PRIVATE ROUTE
-========================= */
-function PrivateRoute({ children }) {
+/* PRIVATE */
+function PrivateRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) return <div>loading...</div>;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/auth" replace />;
 
-  if (!user) return <div>no user</div>;
-
-  return children;
+  return <>{children}</>;
 }
 
-/* =========================
-   PUBLIC ROUTE
-========================= */
+/* PUBLIC */
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading, initialized } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (!initialized || loading) {
-    return <LoadingScreen />;
-  }
-
+  if (loading) return <LoadingScreen />;
   if (user) return <Navigate to="/" replace />;
 
   return <>{children}</>;
 }
 
-/* =========================
-   ROUTES
-========================= */
+/* ROUTES */
 function AppRoutes() {
   return (
     <Routes>
@@ -94,10 +82,8 @@ function AppRoutes() {
   );
 }
 
-/* =========================
-   APP ROOT
-========================= */
-function App() {
+/* APP */
+export default function App() {
   return (
     <Router>
       <AuthProvider>
@@ -108,5 +94,3 @@ function App() {
     </Router>
   );
 }
-
-export default App;
