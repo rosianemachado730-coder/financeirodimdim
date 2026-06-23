@@ -1,8 +1,15 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useRef,
+  useCallback,
+} from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, Profile } from '../lib/supabase';
 
-// App version for cache invalidation
 const APP_VERSION = '1.0.2';
 
 interface AuthContextType {
@@ -18,353 +25,179 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function clearInvalidStorage(): void {
+/* =========================
+   STORAGE CLEANUP SAFE
+========================= */
+function clearInvalidStorage() {
   try {
     const storedVersion = localStorage.getItem('app_version');
 
-    if (storedVersion !== APP_VERSION) {
-      console.log('[AUTH] Version mismatch. Stored:', storedVersion, 'Current:', APP_VERSION);
+    if (storedVersion === APP_VERSION) return;
 
-      // Clear old Supabase auth tokens that might be corrupted
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (
-          key.includes('supabase.auth.token') ||
-          key.includes('sb-') ||
-          key.includes('-auth-token')
-        )) {
-          keysToRemove.push(key);
-        }
+    const keysToRemove: string[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.includes('supabase') || key.includes('sb-') || key.includes('auth'))
+      ) {
+        keysToRemove.push(key);
       }
-
-      // Only clear if there are suspicious keys
-      if (keysToRemove.length > 0) {
-        console.log('[AUTH] Clearing', keysToRemove.length, 'old auth keys');
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-      }
-
-      // Update version
-      localStorage.setItem('app_version', APP_VERSION);
     }
-  } catch (err) {
-    console.error('[AUTH] Error clearing storage:', err);
-  }
+
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    localStorage.setItem('app_version', APP_VERSION);
+  } catch {}
 }
 
-async function validateSession(session: Session | null): Promise<boolean> {
-  if (!session) return false;
-
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error) {
-      console.error('[SESSION] Validation error:', error);
-      return false;
-    }
-
-    if (!user) {
-      console.log('[SESSION] No user returned, session invalid');
-      return false;
-    }
-
-    console.log('[SESSION] Session valid for user:', user.id);
-    return true;
-  } catch (err) {
-    console.error('[SESSION] Exception validating session:', err);
-    return false;
-  }
-}
-
+/* =========================
+   PROVIDER
+========================= */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const isInitialized = useRef(false);
-  const profileFetched = useRef(new Set<string>());
 
-  const ensureProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    // Skip if already fetched this session
-    if (profileFetched.current.has(userId)) {
-      console.log('[PROFILE] Already fetched this session, checking cache...');
+  const initialized = useRef(false);
+  const profileLoading = useRef(false);
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (!error && data) {
-        console.log('[PROFILE] Cached profile found');
-        return data;
-      }
-      return null;
-    }
+  /* =========================
+     PROFILE LOADER (SAFE)
+  ========================= */
+  const ensureProfile = useCallback(async (userId: string) => {
+    if (profileLoading.current) return null;
+    profileLoading.current = true;
 
     try {
-      console.log('[PROFILE] Fetching/creating profile for user:', userId);
-
-      // Try to get existing profile
-      const { data: existingProfile, error: fetchError } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (fetchError) {
-        console.error('[PROFILE] Fetch error:', fetchError);
-        return null;
-      }
+      if (data) return data;
 
-      if (existingProfile) {
-        console.log('[PROFILE] Found existing profile:', existingProfile.id);
-        profileFetched.current.add(userId);
-        return existingProfile;
-      }
-
-      // Create new profile using upsert to handle race conditions
-      console.log('[PROFILE] Creating new profile...');
-
-      const { data: newProfile, error: insertError } = await supabase
+      const { data: created } = await supabase
         .from('profiles')
-        .upsert(
-          { user_id: userId },
-          { onConflict: 'user_id', ignoreDuplicates: true }
-        )
+        .insert({ user_id: userId })
         .select()
         .maybeSingle();
 
-      if (insertError) {
-        console.error('[PROFILE] Insert error:', insertError);
-
-        // Try fetching again in case of race condition
-        const { data: retryProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (retryProfile) {
-          profileFetched.current.add(userId);
-          return retryProfile;
-        }
-        return null;
-      }
-
-      if (newProfile) {
-        console.log('[PROFILE] Created profile:', newProfile.id);
-        profileFetched.current.add(userId);
-        return newProfile;
-      }
-
-      return null;
-    } catch (err) {
-      console.error('[PROFILE] Exception:', err);
-      return null;
+      return created || null;
+    } finally {
+      profileLoading.current = false;
     }
   }, []);
 
+  /* =========================
+     INIT AUTH (RUN ONCE)
+  ========================= */
   useEffect(() => {
-    if (isInitialized.current) return;
-    isInitialized.current = true;
+    if (initialized.current) return;
+    initialized.current = true;
 
-    const initAuth = async () => {
-      console.log('[AUTH] Starting auth initialization...');
-      console.log('[AUTH] App version:', APP_VERSION);
+    let mounted = true;
 
-      // Clear invalid storage on version change
+    const init = async () => {
       clearInvalidStorage();
 
-      try {
-        // Get initial session
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          console.error('[AUTH] getSession error:', sessionError);
+      if (!mounted) return;
 
-          // Try to recover by signing out
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
-        }
-
-        console.log('[SESSION] Initial session:', initialSession ? 'exists' : 'null');
-
-        if (initialSession) {
-          // Validate the session
-          const isValid = await validateSession(initialSession);
-
-          if (!isValid) {
-            console.log('[SESSION] Invalid session, signing out...');
-            await supabase.auth.signOut();
-            setLoading(false);
-            return;
-          }
-
-          console.log('[SESSION] Session valid');
-          setSession(initialSession);
-          setUser(initialSession.user);
-
-          // Fetch/create profile
-          const profile = await ensureProfile(initialSession.user.id);
-          if (profile) {
-            setProfile(profile);
-          }
-        }
-      } catch (err) {
-        console.error('[AUTH] Exception during init:', err);
-
-        // Try to recover
-        try {
-          await supabase.auth.signOut();
-        } catch {
-          // Ignore signout errors
-        }
-      } finally {
-        console.log('[AUTH] Initialization complete, setting loading=false');
+      if (error) {
         setLoading(false);
+        return;
       }
+
+      const session = data.session;
+
+      if (session?.user) {
+        setSession(session);
+        setUser(session.user);
+
+        const prof = await ensureProfile(session.user.id);
+        if (mounted) setProfile(prof);
+      }
+
+      setLoading(false);
     };
 
-    initAuth();
+    init();
 
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        console.log('[AUTH] Auth state change:', event);
-        console.log('[SESSION] New session:', newSession ? 'exists' : 'null');
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange(async (event, newSession) => {
+        if (!mounted) return;
 
-        // Don't process during initial load
-        if (event === 'INITIAL_SESSION') {
-          return;
-        }
+        if (event === 'INITIAL_SESSION') return;
 
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
         if (event === 'SIGNED_IN' && newSession?.user) {
-          const profile = await ensureProfile(newSession.user.id);
-          if (profile) {
-            setProfile(profile);
-          }
-        } else if (event === 'SIGNED_OUT') {
-          console.log('[AUTH] Signed out, clearing state');
-          setProfile(null);
-          profileFetched.current.clear();
-        } else if (event === 'TOKEN_REFRESHED') {
-          console.log('[AUTH] Token refreshed');
-        } else if (event === 'USER_UPDATED') {
-          console.log('[AUTH] User updated');
+          const prof = await ensureProfile(newSession.user.id);
+          if (mounted) setProfile(prof);
         }
-      }
-    );
+
+        if (event === 'SIGNED_OUT') {
+          setProfile(null);
+        }
+      });
 
     return () => {
-      console.log('[AUTH] Unsubscribing from auth changes');
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [ensureProfile]);
 
+  /* =========================
+     AUTH ACTIONS
+  ========================= */
   const signUp = async (email: string, password: string, name?: string) => {
-    console.log('[AUTH] signUp called for:', email);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
 
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name },
-        },
-      });
-
-      if (error) {
-        console.error('[AUTH] signUp error:', error);
-        return { error: new Error(error.message) };
-      }
-
-      console.log('[AUTH] signUp successful');
-      return { error: null };
-    } catch (err) {
-      console.error('[AUTH] signUp exception:', err);
-      return { error: err as Error };
-    }
+    if (error) return { error: new Error(error.message) };
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('[AUTH] signIn called for:', email);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('[AUTH] signIn error:', error);
-        return { error: new Error(error.message) };
-      }
-
-      console.log('[AUTH] signIn successful');
-      return { error: null };
-    } catch (err) {
-      console.error('[AUTH] signIn exception:', err);
-      return { error: err as Error };
-    }
+    if (error) return { error: new Error(error.message) };
+    return { error: null };
   };
 
   const signOut = async () => {
-    console.log('[AUTH] signOut called');
-
-    try {
-      await supabase.auth.signOut();
-
-      setUser(null);
-      setProfile(null);
-      setSession(null);
-      profileFetched.current.clear();
-
-      console.log('[AUTH] signOut complete');
-    } catch (err) {
-      console.error('[AUTH] signOut error:', err);
-
-      // Clear state anyway
-      setUser(null);
-      setProfile(null);
-      setSession(null);
-    }
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+    setSession(null);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
-    if (!user) {
-      console.warn('[AUTH] updateProfile called without user');
-      return { error: new Error('No user logged in') };
-    }
+    if (!user) return { error: new Error('No user') };
 
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('user_id', user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('user_id', user.id);
 
-      if (error) {
-        console.error('[AUTH] updateProfile error:', error);
-        return { error: new Error(error.message) };
-      }
+    if (error) return { error: new Error(error.message) };
 
-      if (profile) {
-        setProfile({ ...profile, ...updates });
-      }
+    setProfile((prev) => (prev ? { ...prev, ...updates } : prev));
 
-      console.log('[AUTH] Profile updated');
-      return { error: null };
-    } catch (err) {
-      console.error('[AUTH] updateProfile exception:', err);
-      return { error: err as Error };
-    }
+    return { error: null };
   };
-
-  console.log('[AUTH] Render - loading:', loading, 'user:', user ? 'exists' : 'null');
 
   return (
     <AuthContext.Provider
@@ -384,10 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/* =========================
+   HOOK
+========================= */
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }
