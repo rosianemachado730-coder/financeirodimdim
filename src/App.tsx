@@ -30,16 +30,14 @@ function LoadingScreen() {
 /* =========================
    PRIVATE ROUTE
 ========================= */
-function PrivateRoute({ children }: { children: ReactNode }) {
-  const { user, loading, initialized } = useAuth();
+function PrivateRoute({ children }) {
+  const { user, loading } = useAuth();
 
-  if (!initialized || loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <div>loading...</div>;
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <div>no user</div>;
 
-  return <>{children}</>;
+  return children;
 }
 
 /* =========================
