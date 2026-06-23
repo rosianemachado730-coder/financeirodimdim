@@ -14,6 +14,7 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
+  initialized: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -36,52 +38,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
 
     const init = async () => {
-      setLoading(true);
-
       const { data } = await supabase.auth.getSession();
       const session = data.session;
 
-      if (!active) return;
+      if (!alive) return;
 
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        if (active) setProfile(profile);
-      } else {
-        setProfile(null);
+        const p = await fetchProfile(session.user.id);
+        if (alive) setProfile(p);
       }
 
       setLoading(false);
+      setInitialized(true);
     };
 
     init();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    const { data } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (!active) return;
+        if (!alive) return;
 
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          if (active) setProfile(profile);
+          const p = await fetchProfile(session.user.id);
+          if (alive) setProfile(p);
         } else {
           setProfile(null);
         }
 
         setLoading(false);
+        setInitialized(true);
       }
     );
 
     return () => {
-      active = false;
-      listener.subscription.unsubscribe();
+      alive = false;
+      data.subscription.unsubscribe();
     };
   }, []);
 
@@ -99,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         session,
         loading,
+        initialized,
         signOut,
       }}
     >
@@ -108,9 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }
