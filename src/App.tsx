@@ -31,9 +31,11 @@ function LoadingScreen() {
    PRIVATE ROUTE
 ========================= */
 function PrivateRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (!initialized || loading) {
+    return <LoadingScreen />;
+  }
 
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -44,9 +46,11 @@ function PrivateRoute({ children }: { children: ReactNode }) {
    PUBLIC ROUTE
 ========================= */
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (!initialized || loading) {
+    return <LoadingScreen />;
+  }
 
   if (user) return <Navigate to="/" replace />;
 
