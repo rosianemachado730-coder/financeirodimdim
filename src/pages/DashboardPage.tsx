@@ -215,14 +215,57 @@ export default function DashboardPage() {
       const expenseSectorsTotal = Object.values(sectorBalances).reduce((a, b) => a + b, 0);
 
       // Verify: incomeSourcesTotal + expenseSectorsTotal should equal netWorth
-      // (within floating point precision for valid data)
-      console.log('[DASHBOARD] Verification:', {
-        incomeSourcesTotal,
-        expenseSectorsTotal,
-        sum: incomeSourcesTotal + expenseSectorsTotal,
-        netWorth,
-        diff: Math.abs(incomeSourcesTotal + expenseSectorsTotal - netWorth)
-      });
+console.log('[DASHBOARD] Verification:', {
+  incomeSourcesTotal,
+  expenseSectorsTotal,
+  sum: incomeSourcesTotal + expenseSectorsTotal,
+  netWorth,
+  diff: Math.abs(incomeSourcesTotal + expenseSectorsTotal - netWorth)
+});
+
+console.log("===== TRANSAÇÕES PROBLEMÁTICAS =====");
+
+txs.forEach((t) => {
+  if (t.type === "income" && !t.income_source_id) {
+    console.log("Income sem fonte:", t);
+  }
+
+  if (t.type === "expense" && !t.expense_sector_id) {
+    console.log("Expense sem setor:", t);
+  }
+
+  if (
+    ![
+      "income",
+      "expense",
+      "transfer_source",
+      "transfer_dest",
+      "sector_transfer_source",
+      "sector_transfer_dest"
+    ].includes(t.type)
+  ) {
+    console.log("Tipo desconhecido:", t);
+  }
+});
+
+console.log("===== SALDO DAS FONTES =====");
+console.table(sourceBalances);
+
+console.log("===== SALDO DOS SETORES =====");
+console.table(sectorBalances);
+
+console.log("===== TODAS AS TRANSAÇÕES =====");
+console.table(
+  txs.map((t) => ({
+    data: t.transaction_date,
+    tipo: t.type,
+    valor: t.amount,
+    fonte: t.income_source_id,
+    setor: t.expense_sector_id,
+    paraFonte: t.transfer_to_income_source_id,
+    paraSetor: t.transfer_to_expense_sector_id,
+  }))
+);
 
       // Calculate emergency fund and investments
       const emergencyFundTotal = sectors
