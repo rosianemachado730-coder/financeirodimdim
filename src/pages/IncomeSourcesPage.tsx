@@ -114,6 +114,28 @@ export default function IncomeSourcesPage() {
           }
         });
 
+        console.log(
+  source.name,
+  {
+    balance,
+    income: transactions
+      .filter(t => t.type === "income" && t.income_source_id === source.id)
+      .reduce((s,t)=>s+t.amount,0),
+
+    transferOut: transactions
+      .filter(t => t.type === "transfer_source" && t.income_source_id === source.id)
+      .reduce((s,t)=>s+t.amount,0),
+
+    transferInDest: transactions
+      .filter(t => t.type === "transfer_dest" && t.income_source_id === source.id)
+      .reduce((s,t)=>s+t.amount,0),
+
+    transferInSource: transactions
+      .filter(t => t.type === "transfer_source" && t.transfer_to_income_source_id === source.id)
+      .reduce((s,t)=>s+t.amount,0),
+  }
+);
+
         return {
           ...source,
           balance,
