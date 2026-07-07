@@ -145,18 +145,12 @@ export default function DashboardPage() {
             }
             break;
 
-          case 'transfer_source':
-  // Money leaves this source (going to another source or sector)
-  // The destination side adds money, so we just deduct from source
+case 'transfer_source':
+  // Money leaves the origin source.
+  // The destination source will be credited by the transfer_dest record.
   if (t.income_source_id) {
     sourceBalances[t.income_source_id] =
       (sourceBalances[t.income_source_id] || 0) - t.amount;
-  }
-
-  // Check if transferring TO another source (not sector)
-  if (t.transfer_to_income_source_id) {
-    sourceBalances[t.transfer_to_income_source_id] =
-      (sourceBalances[t.transfer_to_income_source_id] || 0) + t.amount;
   }
   break;
 
