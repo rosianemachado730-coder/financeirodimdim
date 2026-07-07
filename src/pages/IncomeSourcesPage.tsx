@@ -93,24 +93,20 @@ export default function IncomeSourcesPage() {
               break;
 
             case 'transfer_source':
-              if (t.income_source_id === source.id) {
-                balance -= t.amount;
-                sourceTransactions.push(t);
-             }
+  // Dinheiro saindo desta fonte
+  if (t.income_source_id === source.id) {
+    balance -= t.amount;
+    sourceTransactions.push(t);
+  }
+  break;
 
-              if (t.transfer_to_income_source_id === source.id) {
-                balance += t.amount;
-                sourceTransactions.push(t);
-             }
-             break;
-
-            case 'transfer_dest':
-              // Money arriving at this source (income_source_id points to destination)
-              if (t.income_source_id === source.id) {
-                balance += t.amount;
-                sourceTransactions.push(t);
-              }
-              break;
+case 'transfer_dest':
+  // Dinheiro chegando nesta fonte
+  if (t.income_source_id === source.id) {
+    balance += t.amount;
+    sourceTransactions.push(t);
+  }
+  break;
           }
         });
 
