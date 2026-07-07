@@ -463,33 +463,39 @@ case 'transfer_dest':
 
               {source.transactions.length > 0 && (
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Últimas movimentações</p>
-<div className="space-y-2 max-h-40 overflow-y-auto">
-  {source.transactions.slice(0, 3).map((tx) => {
-    const isPositive =
-      tx.type === 'income' ||
-      tx.type === 'transfer_dest';
+  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+    Últimas movimentações
+  </p>
 
-    return (
-      <div key={tx.id} className="flex items-center justify-between text-sm">
-        <span className="text-gray-600 dark:text-gray-400 truncate flex-1">
-          {tx.description}
-        </span>
+  <div className="space-y-2 max-h-40 overflow-y-auto">
+    {source.transactions.slice(0, 3).map((tx) => {
+      const isPositive =
+        tx.type === 'income' ||
+        tx.type === 'transfer_dest';
 
-        <span
-className={`font-medium ${
-  isPositive
-    ? 'text-success-600 dark:text-success-400'
-    : 'text-error-600 dark:text-error-400'
-}`}
+      return (
+        <div
+          key={tx.id}
+          className="flex items-center justify-between text-sm"
         >
-                          {isPositive ? '+' : '-'} {formatCurrency(tx.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <span className="text-gray-600 dark:text-gray-400 truncate flex-1">
+            {tx.description}
+          </span>
+
+          <span
+            className={`font-medium ${
+              isPositive
+                ? 'text-success-600 dark:text-success-400'
+                : 'text-error-600 dark:text-error-400'
+            }`}
+          >
+            {isPositive ? '+' : '-'} {formatCurrency(tx.amount)}
+          </span>
+        </div>
+      );
+    })}
+  </div>
+</div>
 
               <button
                 onClick={() => setViewingSource(source)}
