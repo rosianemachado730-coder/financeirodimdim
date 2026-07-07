@@ -737,20 +737,30 @@ case 'transfer_dest':
                           {formatDate(tx.transaction_date)}
                         </p>
                       </div>
-                      <p
-                        className={`font-semibold ${
-                          tx.type === 'income' ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'
-                        }`}
-                      >
-                        {tx.type === 'income' ? '+' : '-'} {formatCurrency(tx.amount)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+  {(() => {
+    const isPositive =
+      tx.type === 'income' ||
+      tx.type === 'transfer_dest';
 
-            <button
+    return (
+      <p
+        className={`font-semibold ${
+          isPositive
+            ? 'text-success-600 dark:text-success-400'
+            : 'text-error-600 dark:text-error-400'
+        }`}
+      >
+        {isPositive ? '+' : '-'} {formatCurrency(tx.amount)}
+      </p>
+    );
+  })()}
+</div>
+))}
+</div>
+)}
+</div>
+
+<button
               onClick={() => {
                 setViewingSource(null);
                 openTransferModal(viewingSource);
