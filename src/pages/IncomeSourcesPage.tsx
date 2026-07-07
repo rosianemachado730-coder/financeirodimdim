@@ -93,17 +93,16 @@ export default function IncomeSourcesPage() {
               break;
 
             case 'transfer_source':
-              // Money leaving this source
               if (t.income_source_id === source.id) {
                 balance -= t.amount;
                 sourceTransactions.push(t);
-              }
-              // Money arriving at this source (if transfer is TO this source)
+             }
+
               if (t.transfer_to_income_source_id === source.id) {
                 balance += t.amount;
                 sourceTransactions.push(t);
-              }
-              break;
+             }
+             break;
 
             case 'transfer_dest':
               // Money arriving at this source (income_source_id points to destination)
